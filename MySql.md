@@ -12,10 +12,34 @@
 
 ```java
 * 事务的四大特性(ACID)
-	1. 原子性（Atomicity）：一个事务是一个不可分割的工作单位，“要么不做，要么全做”。 
-	2. 一致性（Consistency）：事务操作前后，数据总量不变（例子：转账总额）。 
+	1. 原子性（Atomicity）：一个事务是一个不可分割的工作单位，“要么不做，要么全做”。(Nothing or All) 
+	2. 一致性（Consistency）：事务对数据库的作用是数据库从一个一致状态转变到另一个一致状态。所谓数据库的一致状态是指数据库中的数据满足完整性约束.(实体完整性, 参照完整性, 用户自定义完整性)
 	3. 隔离性（Isolation） ：多个事务之间，相互独立。
 	4. 持久性（Durability） ：当事务提交或回滚后，数据库会持久化的保存数据。 
+```
+
+```mysql
+补充：
+	完整性约束：
+		1. 实体完整性规则：主码的值不能为空或部分为空.
+		2. 参照完整性规则：指一个关系的外码取值必须是相关关系中主码的有效值或空值.
+		3. 用户自定义完整性：域(约束条件)必须满足语义要求.
+```
+
+##### 1.2 对一致性的理解
+
+```mysql
+	事务里的原子性，隔离性，持久性都是依赖于数据库的具体实现的，而唯独一致性是依赖于数据库自动检查和我们开发者共同实现的. 
+	事务的一致性就是：数据库从一个一致状态转变到另一个一致状态，这里的所谓的数据库一致状态的意思是：数据库中的数据满足完整性约束(也就是实体完整性，参照完整性，用户自定义完整性)，因为里边有用户自定义完整性，所以这就需要我们开发者自己来定义正确的约束条件来确保逻辑正确.
+	所以说事务的一致性是依赖于数据库的原子性，隔离性，持久性和我们程序员定义正确的约束来实现的.
+```
+
+```mysql
+补充：
+	一致性与原子性的区别 与联系？
+		1. 原子性的侧重点是：事务的提交与回滚(过程).
+		2. 一致性的侧重点是：事务执行前后的状态(结果).
+		3. 事务里的一致性是基于原子性，隔离性，持久性和我们程序员定义正确的约束来实现的.
 ```
 
 
@@ -38,19 +62,19 @@
 ##### 3. 设置隔离级别(针对读操作)
 
 ```java
-1. Read Uncommited【读未提交】
+1. READ UNCOMMITTED【读未提交】
 	* 引发问题：脏读
 	* 指的是：一个事务可以读取到另一个事务还未提交的数据。这就会引发 “脏读”。读取到的是数据库内存中的数据，而并非真正磁盘上的数据。
 
-2. Read Commited 【读已提交】
+2. READ COMMITTED 【读已提交】	-- oracle 默认的隔离级别
 	* 解决：脏读。	引发问题：不可重读
 	* 与前面的读未提交刚好相反，这个隔离级别是，只能读取到其他事务已经提交的数据，那些没有提交的数据是读不出来的。但是这会造成一个问题是： 前后读取到的结果不一样。 发生了不可重复读!!!, 所谓的不可重复读，就是不能执行多次读取，否则出现结果不一 。
 
-3. Repeatable Read 【重复读】	--MySql 默认的隔离级别
+3. REPEATABLE READ 【重复读】	--MySql 默认的隔离级别
 	* 解决：脏读，不可重读。	未解决：幻读
 	* 该隔离级别， 可以让事务在自己的会话中重复读取数据，并且不会出现结果不一样的状况，即使其他事务已经提交了，也依然还是显示以前的数据。
 
-4. Serializable 【可串行化】 
+4. SERIALIZABLE 【可串行化】 
 	* 解决：脏读，不可重读，幻读
 	* 如果有一个连接的隔离级别设置为了串行化 ，那么谁先打开了事务， 谁就有了先执行的权利， 谁后打开事务，谁就只能得着，等前面的那个事务，提交或者回滚后，才能执行。  但是这种隔离级别一般比较少用。 容易造成性能上的问题。 效率比较低。
 ```
@@ -559,9 +583,541 @@ select sex, avg(math) from student3 where math > 70 group by sex having count(id
 
 
 
+### 数据库设计
+
+```mysql
+1. 多表之间的关系
+	1. 分类：
+		1. 一对一(了解)：
+			* 如：人和身份证
+			* 分析：一个人只有一个身份证，一个身份证只能对应一个人
+			* 实现方式：一对一关系实现，可以在任意一方添加唯一外键指向另一方的主键。
+			
+		2. 一对多(多对一)：
+			* 如：部门和员工
+			* 分析：一个部门有多个员工，一个员工只能对应一个部门
+			* 实现方式：在多的一方建立外键，指向一的一方的主键。
+			
+		3. 多对多：
+			* 如：学生和课程
+			* 分析：一个学生可以选择很多门课程，一个课程也可以被很多学生选择
+			* 实现方式：多对多关系实现需要借助第三张中间表。中间表至少包含两个字段，这两个字段作为第三张表的外键，分别指向两张表的主键。
+```
+
+```mysql
+3. 案例  
+	# day0917 温馨提示：建议动手实现一下！！！
+
+		-- 创建旅游线路分类表 tab_category
+		-- cid 旅游线路分类主键，自动增长
+		-- cname 旅游线路分类名称非空，唯一，字符串 100
+		CREATE TABLE tab_category (
+			cid INT PRIMARY KEY AUTO_INCREMENT,
+			cname VARCHAR(100) NOT NULL UNIQUE
+		);
+		
+		-- 创建旅游线路表 tab_route
+		/*
+		rid 旅游线路主键，自动增长
+		rname 旅游线路名称非空，唯一，字符串 100
+		price 价格
+		rdate 上架时间，日期类型
+		cid 外键，所属分类
+		*/
+		CREATE TABLE tab_route(
+			rid INT PRIMARY KEY AUTO_INCREMENT,
+			rname VARCHAR(100) NOT NULL UNIQUE,
+			price DOUBLE,
+			rdate DATE,
+			cid INT,
+			FOREIGN KEY (cid) REFERENCES tab_category(cid)
+		);
+		
+		-- 创建用户表 tab_user
+		/* 
+		uid 用户主键，自增长
+		username 用户名长度 100，唯一，非空
+		password 密码长度 30，非空
+		name 真实姓名长度 100
+		birthday 生日
+		sex 性别，定长字符串 1
+		telephone 手机号，字符串 11
+		email 邮箱，字符串长度 100
+		*/
+		CREATE TABLE tab_user (
+			uid INT PRIMARY KEY AUTO_INCREMENT,
+			username VARCHAR(100) UNIQUE NOT NULL,
+			PASSWORD VARCHAR(30) NOT NULL,
+			NAME VARCHAR(100),
+			birthday DATE,
+			sex CHAR(1) DEFAULT '男',
+			telephone VARCHAR(11),
+			email VARCHAR(100)
+		);
+		
+		
+		-- 创建收藏表 tab_favorite
+		/*
+		rid 旅游线路 id，外键
+		date 收藏时间
+		uid 用户 id，外键
+		rid 和 uid 不能重复，设置复合主键，同一个用户不能收藏同一个线路两次
+		*/
+		CREATE TABLE tab_favorite (
+			rid INT, -- 线路id
+			DATE DATETIME,
+			uid INT, -- 用户id
+			-- 创建复合主键
+			PRIMARY KEY(rid,uid), -- 联合主键
+			FOREIGN KEY (rid) REFERENCES tab_route(rid),
+			FOREIGN KEY(uid) REFERENCES tab_user(uid)
+		);
+```
 
 
 
+### 数据库设计范式
+
+```java
+1. 数据库范式：
+    * 概念：设计数据库时，需要遵循的一些规范。要遵循后边的范式要求，必须先遵循前边的所有范式要求，设计关系数据库时，遵从不同的规范要求，设计出合理的关系型数据库，这些不同的规范要求被称为不同的范式，各种范式呈递次规范，越高的范式数据库冗余越小。
+    * 目前关系数据库有六种范式：第一范式（1NF）、第二范式（2NF）、第三范式（3NF）、巴斯-科德范式（BCNF）、第四范式(4NF）和第五范式（5NF，又称完美范式）。
+    // 掌握三大范式即可！！！
+
+2. 三大范式(掌握)：
+	1. 第一范式（1NF）：每一列都是不可分割的原子数据项
+	2. 第二范式（2NF）：在1NF的基础上，非码属性必须完全依赖于码（在1NF基础上消除非主属性对主码的部分函数依赖）
+    3. 第三范式（3NF）：在2NF基础上，任何非主属性不依赖于其它非主属性（在2NF基础上消除传递依赖）
+
+                                                                    
+3. 几个概念：
+                                                                                                ** 函数依赖：A-->B,如果通过A属性(属性组)的值，可以确定唯一B属性的值。则称B依赖于A
+		  例如：学号-->姓名。  （学号，课程名称） --> 分数
+                                                                                                1. 完全函数依赖：A-->B， 如果A是一个属性组，则B属性值得确定需要依赖于A属性组中所有的属性值。
+		   例如：（学号，课程名称） --> 分数
+                                                                                                2. 部分函数依赖：A-->B， 如果A是一个属性组，则B属性值得确定只需要依赖于A属性组中某一些值即可。              例如：（学号，课程名称） -- > 姓名
+                                                                                                3. 传递函数依赖：A-->B, B-->C . 如果通过A属性(属性组)的值，可以确定唯一B属性的值，在通过B属性（属性组）的值可以确定唯一C属性的值，则称 C 传递函数依赖于A
+			例如：学号-->系名，系名-->系主任
+                                                                                                5. 码：如果在一张表中，一个属性或属性组，被其他所有属性所完全依赖，则称这个属性(属性组)为该表的码
+			例如：该表中码为：（学号，课程名称）
+		
+        * 主属性：码属性组中的所有属性
+		* 非主属性：除了码属性组的属性
+```
+
+
+
+### 数据库的备份和还原（了解）
+
+```mysql
+1. 命令行：
+	* 语法：
+		* 备份： mysqldump -u用户名 -p密码 数据库名称 > 保存的路径
+		* 还原：
+			1. 登录数据库: mysql -uroot -p
+			2. 创建数据库: create database db1;
+			3. 使用数据库: use db1;
+			4. 执行文件。source 文件路径
+2. 图形化工具：
+```
+
+
+
+
+
+### 多表查询
+
+##### 0. 直接多表查询
+
+```mysql
+select * from emp, dept;
+
+# 查询出来的两个表的笛卡尔积
+# 笛卡尔积：有两个集合A,B. 取这两个集合的所有组成情况。
+```
+
+
+
+##### 1. 内连接
+
+```mysql
+1. 语法: select 字段列表 from 表1 inner join 表2 on 条件;
+
+2. 查询出来的是'两个表数据的交集'.
+
+3. 隐式内连接: 
+		select * from emp, dept where emp.dept_id = dept.id;
+
+4. 显式内连接: 
+		select * from emp inner join dept on emp.dept_id = dept.id;
+
+```
+
+
+
+##### 2. 外连接
+
+```mysql
+1. 左外连接: 
+	* 语法: select 字段列表 from 表1 left [outer] join 表2 on 条件;
+	* 查询的是'左表所有数据以及其交集部分'.
+	* 举例：
+		-- 查询所有员工信息，如果员工有部门，则查询部门名称，没有部门，则不显示部门名称
+		select emp.*, dept.name from emp left join dept on emp.dept_id = dept.id;
+
+2. 使用左外连接时，左表 left join 右表 on 条件; -->查询左表全部, 右表的交集部分
+
+3. 右外连接同理，一般我们就掌握左外连接即可.
+```
+
+
+
+##### 3. 子查询
+
+```mysql
+1. 概念：查询中嵌套查询，称嵌套查询为子查询。
+
+2. 子查询为单行单列时，用运算符(<, >, =, >=...)
+   子查询为多行单列时，用运算符( in )
+   子查询为多行多列时，直接用内连接即可，没必要用子查询
+
+3. 举例：
+	-- 查询工资高于平均工资的人
+	select * from emp where salary > (select avg(salary) from emp);
+
+	-- 查询市场部和财务部的人的信息
+	select * from emp where dept_id in (select id from dept where name='市场部' or name='财务部');
+```
+
+
+
+### 多表查询练习(大练习)
+
+```mysql
+-- 部门表
+CREATE TABLE dept (
+  id INT PRIMARY KEY PRIMARY KEY, -- 部门id
+  dname VARCHAR(50), -- 部门名称
+  loc VARCHAR(50) -- 部门所在地
+);
+
+-- 添加4个部门
+INSERT INTO dept(id,dname,loc) VALUES 
+(10,'教研部','北京'),
+(20,'学工部','上海'),
+(30,'销售部','广州'),
+(40,'财务部','深圳');
+
+-- 职务表，职务名称，职务描述
+CREATE TABLE job (
+  id INT PRIMARY KEY,
+  jname VARCHAR(20),
+  description VARCHAR(50)
+);
+
+-- 添加4个职务
+INSERT INTO job (id, jname, description) VALUES
+(1, '董事长', '管理整个公司，接单'),
+(2, '经理', '管理部门员工'),
+(3, '销售员', '向客人推销产品'),
+(4, '文员', '使用办公软件');
+
+-- 员工表
+CREATE TABLE emp (
+  id INT PRIMARY KEY, -- 员工id
+  ename VARCHAR(50), -- 员工姓名
+  job_id INT, -- 职务id
+  mgr INT , -- 上级领导
+  joindate DATE, -- 入职日期
+  salary DECIMAL(7,2), -- 工资
+  bonus DECIMAL(7,2), -- 奖金
+  dept_id INT, -- 所在部门编号
+  CONSTRAINT emp_jobid_ref_job_id_fk FOREIGN KEY (job_id) REFERENCES job (id),
+  CONSTRAINT emp_deptid_ref_dept_id_fk FOREIGN KEY (dept_id) REFERENCES dept (id)
+);
+
+-- 添加员工
+INSERT INTO emp(id,ename,job_id,mgr,joindate,salary,bonus,dept_id) VALUES 
+(1001,'孙悟空',4,1004,'2000-12-17','8000.00',NULL,20),
+(1002,'卢俊义',3,1006,'2001-02-20','16000.00','3000.00',30),
+(1003,'林冲',3,1006,'2001-02-22','12500.00','5000.00',30),
+(1004,'唐僧',2,1009,'2001-04-02','29750.00',NULL,20),
+(1005,'李逵',4,1006,'2001-09-28','12500.00','14000.00',30),
+(1006,'宋江',2,1009,'2001-05-01','28500.00',NULL,30),
+(1007,'刘备',2,1009,'2001-09-01','24500.00',NULL,10),
+(1008,'猪八戒',4,1004,'2007-04-19','30000.00',NULL,20),
+(1009,'罗贯中',1,NULL,'2001-11-17','50000.00',NULL,10),
+(1010,'吴用',3,1006,'2001-09-08','15000.00','0.00',30),
+(1011,'沙僧',4,1004,'2007-05-23','11000.00',NULL,20),
+(1012,'李逵',4,1006,'2001-12-03','9500.00',NULL,30),
+(1013,'小白龙',4,1004,'2001-12-03','30000.00',NULL,20),
+
+
+-- 工资等级表
+CREATE TABLE salarygrade (
+  grade INT PRIMARY KEY,   -- 级别
+  losalary INT,  -- 最低工资
+  hisalary INT -- 最高工资
+);
+
+-- 添加5个工资等级
+INSERT INTO salarygrade(grade,losalary,hisalary) VALUES 
+(1,7000,12000),
+(2,12010,14000),
+(3,14010,20000),
+(4,20010,30000),
+(5,30010,99990);
+```
+
+
+
+```mysql
+-- 需求：
+
+-- 1.查询所有员工信息。查询员工编号，员工姓名，工资，职务名称，职务描述
+/*
+	分析：
+		1.员工编号，员工姓名，工资，需要查询emp表  职务名称，职务描述 需要查询job表
+		2.查询条件 emp.job_id = job.id
+*/
+SELECT 
+	t1.`id`, -- 员工编号
+	t1.`ename`, -- 员工姓名
+	t1.`salary`,-- 工资
+	t2.`jname`, -- 职务名称
+	t2.`description` -- 职务描述
+FROM 
+	emp t1, job t2
+WHERE 
+	t1.`job_id` = t2.`id
+
+
+
+-- 2.查询员工编号，员工姓名，工资，职务名称，职务描述，部门名称，部门位置
+/*
+	分析：
+		1. 员工编号，员工姓名，工资 emp  职务名称，职务描述 job  部门名称，部门位置 dept
+		2. 条件： emp.job_id = job.id and emp.dept_id = dept.id
+*/
+
+SELECT 
+	t1.`id`, -- 员工编号
+	t1.`ename`, -- 员工姓名
+	t1.`salary`,-- 工资
+	t2.`jname`, -- 职务名称
+	t2.`description`, -- 职务描述
+	t3.`dname`, -- 部门名称
+	t3.`loc` -- 部门位置
+FROM 
+	emp t1, job t2,dept t3
+WHERE 
+	t1.`job_id` = t2.`id` AND t1.`dept_id` = t3.`id`;
+ 
+ 
+ 
+-- 3.查询员工姓名，工资，工资等级
+/*
+	分析：
+		1.员工姓名，工资 emp  工资等级 salarygrade
+		2.条件 emp.salary >= salarygrade.losalary and emp.salary <= salarygrade.hisalary
+			emp.salary BETWEEN salarygrade.losalary and salarygrade.hisalary
+*/
+SELECT 
+	t1.ename ,
+	t1.`salary`,
+	t2.*
+FROM 
+	emp t1, salarygrade t2
+WHERE 
+	t1.`salary` BETWEEN t2.`losalary` AND t2.`hisalary`;
+
+
+
+-- 4.查询员工姓名，工资，职务名称，职务描述，部门名称，部门位置，工资等级
+/*
+	分析：
+		1. 员工姓名，工资 emp ， 职务名称，职务描述 job 部门名称，部门位置，dept  工资等级 salarygrade
+		2. 条件： emp.job_id = job.id and emp.dept_id = dept.id and emp.salary BETWEEN salarygrade.losalary and salarygrade.hisalary
+			
+*/
+SELECT 
+	t1.`ename`,
+	t1.`salary`,
+	t2.`jname`,
+	t2.`description`,
+	t3.`dname`,
+	t3.`loc`,
+	t4.`grade`
+FROM 
+	emp t1,job t2,dept t3,salarygrade t4
+WHERE 
+	t1.`job_id` = t2.`id` 
+	AND t1.`dept_id` = t3.`id`
+	AND t1.`salary` BETWEEN t4.`losalary` AND t4.`hisalary`;
+	
+	
+	
+-- 5.查询出部门编号、部门名称、部门位置、部门人数
+/*
+	分析：
+		1.部门编号、部门名称、部门位置 dept 表。 部门人数 emp表
+		2.使用分组查询。按照emp.dept_id完成分组，查询count(id)
+		3.使用子查询将第2步的查询结果和dept表进行关联查询
+		
+*/
+
+-- 子查询写法
+SELECT 
+	t1.`id`,t1.`dname`,t1.`loc` , t2.total
+FROM 
+	dept t1,
+	(SELECT
+		dept_id,COUNT(id) total		-- total 取个别名，方便上面查询字段
+	FROM 
+		emp
+	GROUP BY dept_id) t2  -- 将查询出来的dept_id(多行多列)作为一张虚拟表t2
+WHERE 
+	t1.`id` = t2.dept_id;
+
+-- 内连接的写法
+SELECT
+	t1.id, t1.dname, t1.loc, count(t2.dept_id)
+FROM
+	dept t1, emp t2
+WHERE
+	t1.id = t2.dept_id
+GROUP BY
+	t2.dept_id
+
+
+-- 6.查询所有员工的姓名及其直接上级的姓名,没有领导的员工也需要查询
+/*
+	分析：
+		1.姓名 emp， 直接上级的姓名 emp
+			* emp表的id 和 mgr 是自关联
+		2.条件 emp.id = emp.mgr
+		3.查询左表的所有数据，和 交集数据
+			* 使用左外连接查询
+	
+*/
+
+/*
+select
+	t1.ename,
+	t1.mgr,
+	t2.`id`,
+	t2.ename
+from emp t1, emp t2
+where t1.mgr = t2.`id`;
+
+*/
+
+SELECT 
+	t1.ename,
+	t1.mgr,
+	t2.`id`,
+	t2.`ename`
+FROM 
+	emp t1
+LEFT JOIN 
+	emp t2
+ON 
+	t1.`mgr` = t2.`id`;
+```
+
+
+
+### 事务的提交方式
+
+```mysql
+1. 概念：
+	* 如果一个包含多个步骤的业务操作，被事务管理，那么这些操作要么同时成功，要么同时失败。
+
+2. 操作：
+		1. 开启事务: start transaction;
+		2. 回滚: rollback;
+		3. 提交: commit;
+		
+3. MySQL数据库中事务默认自动提交
+		
+		* 事务提交的两种方式：
+			* 自动提交：
+				* mysql就是自动提交的				-- 记住！！！
+				* 一条DML(增删改)语句会自动提交一次事务。
+			* 手动提交：
+				* Oracle 数据库默认是手动提交事务		-- 剧透！！！
+				* 需要先开启事务，再提交
+		* 修改事务的默认提交方式：(了解)
+			* 查看事务的默认提交方式：SELECT @@autocommit; -- 1 代表自动提交  0 代表手动提交
+			* 修改默认提交方式： set @@autocommit = 0;
+```
+
+
+
+
+
+### DCL: 数据库权限相关(了解)
+
+```mysql
+* SQL分类：
+	1. DDL：操作数据库和表
+	2. DML：增删改表中数据
+	3. DQL：查询表中数据
+	4. DCL：管理用户，授权
+
+* DBA：数据库管理员
+
+* DCL：管理用户，授权
+	1. 管理用户
+		1. 添加用户：
+			* 语法：CREATE USER '用户名'@'主机名' IDENTIFIED BY '密码';
+		2. 删除用户：
+			* 语法：DROP USER '用户名'@'主机名';
+		3. 修改用户密码：
+			
+			UPDATE USER SET PASSWORD = PASSWORD('新密码') WHERE USER = '用户名';
+			UPDATE USER SET PASSWORD = PASSWORD('abc') WHERE USER = 'lisi';
+			
+			SET PASSWORD FOR '用户名'@'主机名' = PASSWORD('新密码');
+			SET PASSWORD FOR 'root'@'localhost' = PASSWORD('123');
+
+			* mysql中忘记了root用户的密码？
+				1. cmd -- > net stop mysql 停止mysql服务
+					* 需要管理员运行该cmd
+
+				2. 使用无验证方式启动mysql服务： mysqld --skip-grant-tables
+				3. 打开新的cmd窗口,直接输入mysql命令，敲回车。就可以登录成功
+				4. use mysql;
+				5. update user set password = password('你的新密码') where user = 'root';
+				6. 关闭两个窗口
+				7. 打开任务管理器，手动结束mysqld.exe 的进程
+				8. 启动mysql服务
+				9. 使用新密码登录。
+		4. 查询用户：
+			-- 1. 切换到mysql数据库
+			USE myql;
+			-- 2. 查询user表
+			SELECT * FROM USER;
+			
+			* 通配符： % 表示可以在任意主机使用用户登录数据库
+
+	2. 权限管理：
+		1. 查询权限：
+			-- 查询权限
+			SHOW GRANTS FOR '用户名'@'主机名';
+			SHOW GRANTS FOR 'lisi'@'%';
+
+		2. 授予权限：
+			-- 授予权限
+			grant 权限列表 on 数据库名.表名 to '用户名'@'主机名';
+			-- 给张三用户授予所有权限，在任意数据库任意表上
+			
+			GRANT ALL ON *.* TO 'zhangsan'@'localhost';
+		3. 撤销权限：
+			-- 撤销权限：
+			revoke 权限列表 on 数据库名.表名 from '用户名'@'主机名';
+			REVOKE UPDATE ON db3.`account` FROM 'lisi'@'%';
+```
 
 
 
